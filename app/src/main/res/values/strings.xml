@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">WARTISH</string>
+    <string name="introduce_datos">INTRODUCE TUS DATOS</string>
+    <string name="login">LOGIN</string>
+    <string name="contraseña">CONTRASEÑA</string>
+    <string name="olvidado_contraseña">¿HAS OLVIDADO TU CONTRASEÑA?</string>
+    <string name="entrar">ENTRAR</string>
+    <string name="registrarse">¡REGISTRATE AHORA!</string>
+    <string name="mejorar">MEJORAR</string>
+    <string name="necesitas">NECESITAS</string>
+    <string name="tienes">TIENES</string>
+    <string name="salir">SALIR</string>
+    <string name="volver">VOLVER</string>
+    <string name="cerrar">CERRAR</string>
+    <string name="pausa">PAUSA</string>
+    <string name="jugar">JUGAR</string>
+    <string name="combo">Combo x %1$d</string>
+</resources>

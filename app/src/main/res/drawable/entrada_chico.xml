@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animation-list xmlns:android="http://schemas.android.com/apk/res/android"
+    android:oneshot="false">
+    <item android:drawable="@drawable/chicoentra1" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra2" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra3" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra4" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra5" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra6" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra7" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra8" android:duration="100" />
+    <item android:drawable="@drawable/chicoentra9" android:duration="100" />
+
+</animation-list>

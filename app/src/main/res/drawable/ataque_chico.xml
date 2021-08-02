@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animation-list xmlns:android="http://schemas.android.com/apk/res/android"
+android:oneshot="true">
+<item android:drawable="@drawable/chicoataque1" android:duration="100" />
+<item android:drawable="@drawable/chicoataque2" android:duration="100" />
+<item android:drawable="@drawable/chicoataque3" android:duration="100" />
+<item android:drawable="@drawable/chicoataque4" android:duration="100" />
+<item android:drawable="@drawable/chicoataque5" android:duration="100" />
+<item android:drawable="@drawable/chicoataque6" android:duration="100" />
+<item android:drawable="@drawable/chicoataque7" android:duration="100" />
+<item android:drawable="@drawable/chicoataque8" android:duration="100" />
+<item android:drawable="@drawable/chicoataque9" android:duration="100" />
+<item android:drawable="@drawable/chicoataque10" android:duration="100" />
+<item android:drawable="@drawable/chicoataque11" android:duration="100" />
+<item android:drawable="@drawable/chicoataque12" android:duration="100" />
+<item android:drawable="@drawable/chicoataque4" android:duration="100" />
+<item android:drawable="@drawable/chicoataque3" android:duration="100" />
+<item android:drawable="@drawable/chicoataque2" android:duration="100" />
+<item android:drawable="@drawable/chicoataque1" android:duration="100" />
+
+</animation-list>

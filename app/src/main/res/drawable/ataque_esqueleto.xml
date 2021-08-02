@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animation-list xmlns:android="http://schemas.android.com/apk/res/android"
+android:oneshot="true">
+<item android:drawable="@drawable/esqueletoataque1" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque2" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque3" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque4" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque5" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque6" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque7" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque8" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque9" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque10" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque4" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque3" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque2" android:duration="100" />
+<item android:drawable="@drawable/esqueletoataque1" android:duration="100" />
+</animation-list>

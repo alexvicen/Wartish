@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".activities.JuegoPrincipal"
+    android:background="@drawable/fondo">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:weightSum="1"
+        android:layout_marginTop="10dp"
+        android:id="@+id/linearLayout"
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp"
+        android:background="@drawable/layaut_movimientos">
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/pbVida"
+            android:indeterminate="false"
+            android:layout_marginRight="10dp"
+            android:progressTint="#55ff00" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="0"
+            android:id="@+id/txtvida"
+            android:typeface="serif" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="(1)"
+            android:id="@+id/txtNivelPersonaje"
+            android:layout_marginRight="50dp"
+            android:typeface="serif" />
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/pb1"
+            android:max="100"
+            android:progress="100"
+            android:indeterminate="false"
+            android:layout_marginRight="10dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="100"
+            android:id="@+id/txt1"
+            android:typeface="serif" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="(1)"
+            android:id="@+id/txtNivelEsqueleto1"
+            android:layout_marginRight="50dp"
+            android:typeface="serif" />
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/pb2"
+            android:layout_marginRight="10dp"
+            android:max="100"
+            android:progress="100"
+            android:indeterminate="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="100"
+            android:id="@+id/txt2"
+            android:typeface="serif" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="(1)"
+            android:id="@+id/txtNivelEsqueleto2"
+            android:layout_marginRight="50dp"
+            android:typeface="serif" />
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/pb3"
+            android:layout_marginRight="10dp"
+            android:max="100"
+            android:progress="100"
+            android:indeterminate="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="100"
+            android:id="@+id/txt3"
+            android:typeface="serif" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:text="(1)"
+            android:id="@+id/txtNivelEsqueleto3"
+            android:typeface="serif" />
+    </LinearLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginBottom="10dp"
+        android:layout_below="@+id/linearLayout"
+        android:id="@+id/rl">
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/btn"
+            android:layout_centerVertical="true"
+            android:layout_centerHorizontal="true"
+            android:typeface="serif"
+            android:background="@android:drawable/ic_media_play" />
+
+        <Button
+            android:layout_width="80dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/btnSimple"
+            android:layout_alignTop="@+id/btnEspecial"
+            android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="true"
+            android:layout_marginRight="5dp"
+            android:typeface="serif"
+            android:background="@drawable/ataque"
+            android:layout_marginLeft="15dp" />
+
+        <Button
+            android:layout_width="60dp"
+            android:layout_height="50dp"
+            android:id="@+id/btnEspecial"
+            android:layout_alignParentBottom="true"
+            android:layout_toRightOf="@+id/btnSimple"
+            android:layout_toEndOf="@+id/btnSimple"
+            android:layout_marginLeft="10dp"
+            android:typeface="serif"
+            android:background="@drawable/ataque_especial" />
+
+        <Button
+            android:layout_width="55dp"
+            android:layout_height="30dp"
+            android:id="@+id/btnVolver"
+            android:layout_alignParentBottom="true"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentEnd="true"
+            android:background="@android:drawable/ic_menu_revert" />
+    </RelativeLayout>
+
+</RelativeLayout>

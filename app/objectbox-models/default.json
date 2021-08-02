@@ -1,0 +1,181 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:6954921299414509701",
+      "lastPropertyId": "26:6718365641961415633",
+      "name": "Character",
+      "properties": [
+        {
+          "id": "1:4120568090313085113",
+          "name": "dbId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8723891044793692627",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:93503415776630180",
+          "name": "level",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "4:3378547859739326697",
+          "name": "experience",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "5:527383675816211182",
+          "name": "life",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "6:7019780443674733030",
+          "name": "attack",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "7:1189547909151449477",
+          "name": "magic",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "8:4636564210198240133",
+          "name": "defense",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "9:1669181063044177806",
+          "name": "speed",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "10:7312413632215055157",
+          "name": "critic",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "11:2915311644402786484",
+          "name": "helmetLevel",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "12:6604929240820570273",
+          "name": "archLevel",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "13:8090135085794224573",
+          "name": "shieldLevel",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "14:5136007827957801023",
+          "name": "glovesLevel",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "15:1995207398308904673",
+          "name": "bootsLevel",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "16:295512251595668368",
+          "name": "arrowLevel",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "17:7758627086030037705",
+          "name": "nugget",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "18:2801579946170588808",
+          "name": "iron",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "19:8270393108870912156",
+          "name": "uncutGem",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "20:8271134190284003094",
+          "name": "rock",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "21:7658102248737682295",
+          "name": "log",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "22:881395772197547497",
+          "name": "goldIngot",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "23:8722169901081178469",
+          "name": "ironIngot",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "24:5636597256234502533",
+          "name": "gem",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "25:178154950681331390",
+          "name": "stone",
+          "type": 5,
+          "flags": 4
+        },
+        {
+          "id": "26:6718365641961415633",
+          "name": "woodenBoard",
+          "type": 5,
+          "flags": 4
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "1:6954921299414509701",
+  "lastIndexId": "0:0",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
