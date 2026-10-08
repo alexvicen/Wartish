@@ -22,7 +22,7 @@ class GameEnginesTest {
     }
 
     @Test
-    fun collectionRewardsEachMatchedCellOnceAndSpendsOneMove() {
+    fun collectionRewardsEachMatchedCellOnceAndHasUnlimitedMoves() {
         val board = MutableList(64) { index -> (index / 8 + index % 8 * 2) % 5 }
         board[8] = 1
         board[9] = 0
@@ -33,21 +33,30 @@ class GameEnginesTest {
         val state = CollectionState(board)
         val result = CollectionEngine.select(CollectionEngine.select(state, 8).state, 9, Random(5))
         assertTrue(result.accepted)
-        assertEquals(19, result.state.movesLeft)
+        assertEquals(Int.MAX_VALUE, result.state.movesLeft)
+        assertFalse(result.state.complete)
         assertTrue(result.rewards.values.sum() >= 5)
     }
 
     @Test
-    fun fallingFourConnectedPiecesRefineOnceAndAreConsumed() {
-        val cells = MutableList(72) { -1 }
-        cells[11 * 6] = 0
-        cells[11 * 6 + 1] = 0
-        cells[11 * 6 + 3] = 0
-        val falling = FallingState(cells = cells, material = 0, row = 10, column = 2, running = true, started = true)
-        val atBottom = FallingEngine.tick(falling).state
-        val result = FallingEngine.tick(atBottom)
-        assertEquals(1, result.refined[Material.STONE] ?: 0)
+    fun tetrominoClearsFullRowAndRewardsEveryBlock() {
+        val cells = MutableList(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 }
+        for (column in 4 until FallingEngine.COLUMNS) cells[19 * FallingEngine.COLUMNS + column] = Material.ROCK.ordinal
+        val falling = FallingState(
+            cells = cells,
+            material = Material.WOOD.ordinal,
+            shapeVariant = FallingEngine.SHAPE_I,
+            row = 19,
+            column = 0,
+            running = true,
+            started = true,
+        )
+        val result = FallingEngine.tick(falling)
+        assertEquals(10, result.state.pendingClear?.cells?.size)
+        assertEquals(4, result.state.pendingClear?.cells?.count { it.material == Material.WOOD.ordinal })
+        assertEquals(6, result.state.pendingClear?.cells?.count { it.material == Material.ROCK.ordinal })
         assertTrue(result.state.cells.all { it == -1 })
+        assertFalse(result.state.complete)
     }
 
     @Test

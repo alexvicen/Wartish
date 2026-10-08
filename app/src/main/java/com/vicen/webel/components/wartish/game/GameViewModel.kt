@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.vicen.webel.components.wartish.data.Equipment
+import com.vicen.webel.components.wartish.data.EquipmentUpgradeOutcome
 import com.vicen.webel.components.wartish.data.GameDatabase
 import com.vicen.webel.components.wartish.data.GameRepository
 import com.vicen.webel.components.wartish.data.Material
@@ -30,6 +31,20 @@ data class EnemyState(
     val speed: Int,
 )
 
+data class BattleAnimationEvent(
+    val id: Long,
+    val special: Boolean = false,
+    val targetIndex: Int = -1,
+)
+
+data class BattleDamageEvent(
+    val id: Long,
+    val damage: Int,
+    val critical: Boolean = false,
+    val targetIndex: Int = -1,
+    val defeated: Boolean = false,
+)
+
 data class BattleState(
     val enemies: List<EnemyState>,
     val enemyIndex: Int = 0,
@@ -43,20 +58,37 @@ data class BattleState(
     val complete: Boolean = false,
     val won: Boolean = false,
     val experienceEarned: Int = 0,
+    val playerAnimation: BattleAnimationEvent? = null,
+    val enemyAnimation: BattleAnimationEvent? = null,
+    val playerDamage: BattleDamageEvent? = null,
+    val enemyDamage: BattleDamageEvent? = null,
+    val encounterNumber: Int = 1,
+    val entrySequence: Long = 0L,
+    val entering: Boolean = false,
+    val entryRemainingMs: Long = 0L,
+    val treatmentUsed: Boolean = false,
+)
+
+data class UpgradeFeedbackEvent(
+    val id: Long,
+    val outcome: EquipmentUpgradeOutcome,
 )
 
 data class GameUiState(
     val player: PlayerEntity = PlayerEntity(),
     val collection: CollectionState? = null,
+    val collectionAnimation: CollectionTurnAnimation? = null,
     val falling: FallingState? = null,
     val battle: BattleState? = null,
     val equipmentDialog: Equipment? = null,
+    val upgradeFeedback: UpgradeFeedbackEvent? = null,
     val notice: String? = null,
 )
 
 class GameViewModel internal constructor(
     application: Application,
     private val clock: GameClock,
+    private val random: Random = Random.Default,
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, GameClock { SystemClock.elapsedRealtime() })
 
@@ -68,8 +100,11 @@ class GameViewModel internal constructor(
     private val collectionMutex = Mutex()
     private val processingMutex = Mutex()
     private val battleMutex = Mutex()
+    private val upgradeMutex = Mutex()
     private var foreground = true
     private var backgroundPausedBattle = false
+    private var collectionAnimationSequence = 0L
+    private var upgradeFeedbackSequence = 0L
     private val collectionType = object : TypeToken<CollectionState>() {}.type
     private val fallingType = object : TypeToken<FallingState>() {}.type
     private val battleType = object : TypeToken<BattleState>() {}.type
@@ -84,54 +119,109 @@ class GameViewModel internal constructor(
     fun openCollection() = viewModelScope.launch {
         val saved = repository.session("collection")
         val game = saved?.let { runCatching { gson.fromJson<CollectionState>(it, collectionType) }.getOrNull() }
+            ?.copy(movesLeft = Int.MAX_VALUE, complete = false)
             ?: CollectionEngine.newGame()
-        _state.update { it.copy(collection = game, notice = null) }
+        _state.update { it.copy(collection = game, collectionAnimation = null, notice = null) }
         repository.saveSession("collection", gson.toJson(game))
     }
 
     fun chooseCell(index: Int) = viewModelScope.launch {
         collectionMutex.withLock {
+            if (_state.value.collectionAnimation != null) return@withLock
             val current = _state.value.collection ?: CollectionEngine.newGame()
             val result = CollectionEngine.select(current, index)
-            if (result.accepted) {
-                var next = result.state
-                val extras = result.rewards.entries.joinToString(" · ") { "${it.value} ${it.key.label.lowercase()}" }
-                var message = if (extras.isBlank()) null else "+$extras"
-                if (!next.complete && !CollectionEngine.hasAvailableMove(next.board)) {
-                    next = CollectionEngine.reshuffle(next)
-                    message = "Tablero reorganizado"
-                }
-                repository.commitCollection(result.rewards, gson.toJson(next))
-                _state.update { it.copy(collection = next, notice = message) }
-            } else {
-                _state.update { it.copy(collection = result.state) }
-                repository.saveSession("collection", gson.toJson(result.state))
+            commitCollectionResult(result)
+        }
+    }
+
+    fun swapCells(first: Int, second: Int, onResolved: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        val accepted = collectionMutex.withLock {
+            if (_state.value.collectionAnimation != null) return@withLock false
+            val current = _state.value.collection ?: CollectionEngine.newGame()
+            val result = CollectionEngine.swap(current, first, second)
+            commitCollectionResult(result)
+            result.accepted
+        }
+        onResolved(accepted)
+    }
+
+    private suspend fun commitCollectionResult(result: CellSwapResult) {
+        if (result.accepted) {
+            var next = result.state
+            var message: String? = null
+            if (!next.complete && !CollectionEngine.hasAvailableMove(next.board)) {
+                next = CollectionEngine.reshuffle(next)
+                message = "Tablero reorganizado"
             }
+            val committedPlayer = repository.commitCollection(result.rewards, gson.toJson(next))
+            val animation = result.animation.takeIf { it.isNotEmpty() }?.let {
+                CollectionTurnAnimation(++collectionAnimationSequence, it)
+            }
+            _state.update {
+                it.copy(
+                    player = committedPlayer,
+                    collection = next,
+                    collectionAnimation = animation,
+                    notice = message,
+                )
+            }
+        } else {
+            _state.update { it.copy(collection = result.state) }
+            repository.saveSession("collection", gson.toJson(result.state))
+        }
+    }
+
+    fun clearCollectionAnimation(id: Long) {
+        _state.update { current ->
+            if (current.collectionAnimation?.id == id) current.copy(collectionAnimation = null) else current
         }
     }
 
     fun restartCollection() = viewModelScope.launch {
         collectionMutex.withLock {
             val game = CollectionEngine.newGame()
-            _state.update { it.copy(collection = game, notice = null) }
+            _state.update { it.copy(collection = game, collectionAnimation = null, notice = null) }
             repository.saveSession("collection", gson.toJson(game))
         }
     }
 
     fun openProcessing() = viewModelScope.launch {
         val saved = repository.session("processing")
-        val game = saved?.let { runCatching { gson.fromJson<FallingState>(it, fallingType) }.getOrNull() }
-            ?: FallingState()
+        val restored = saved?.let { runCatching { gson.fromJson<FallingState>(it, fallingType) }.getOrNull() }
+        val game = when {
+            restored?.pieceVersion == 2 && restored.cells.size == FallingEngine.COLUMNS * FallingEngine.ROWS -> restored
+            restored?.pieceVersion == 1 && restored.cells.size == 72 -> {
+                val expandedCells = MutableList(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 }
+                for (row in 0 until 12) for (column in 0 until 6) {
+                    expandedCells[row * FallingEngine.COLUMNS + column + 2] = restored.cells[row * 6 + column]
+                }
+                restored.copy(
+                    cells = expandedCells,
+                    column = restored.column + 2,
+                    shapeVariant = restored.material.coerceIn(0, FallingEngine.SHAPE_T),
+                    pendingClear = restored.pendingClear?.copy(
+                        cells = restored.pendingClear.cells.map { cell ->
+                            cell.copy(index = (cell.index / 6) * FallingEngine.COLUMNS + cell.index % 6 + 2)
+                        },
+                    ),
+                    pieceVersion = 2,
+                )
+            }
+            else -> FallingState()
+        }
         _state.update { it.copy(falling = game.copy(running = false), notice = null) }
+        if (restored !== game) repository.saveSession("processing", gson.toJson(game.copy(running = false)))
     }
 
     fun startOrResumeProcessing() = viewModelScope.launch {
         processingMutex.withLock {
-            val current = _state.value.falling ?: FallingState()
+            var current = _state.value.falling ?: FallingState()
             if (current.complete) {
-                _state.update { it.copy(notice = "La partida terminó. Vuelve al menú para conservar los refinados.") }
-                return@withLock
+                current = FallingState()
+                _state.update { it.copy(falling = current, notice = null) }
+                repository.saveSession("processing", gson.toJson(current))
             }
+            if (current.pendingClear != null) return@withLock
             if (current.material >= 0 && current.started) {
                 val resumed = current.copy(running = true)
                 _state.update { it.copy(falling = resumed) }
@@ -139,22 +229,37 @@ class GameViewModel internal constructor(
                 return@withLock
             }
             val player = repository.playerOnce()
-            val raw = Material.entries.take(5).map { it to player.amount(it) }.filter { it.second > 0 }
-            if (raw.isEmpty()) {
-                _state.update { it.copy(notice = "No tienes materias primas. Consigue algunas en Recolección.") }
-                return@withLock
-            }
-            if (current.started && current.cells[2] >= 0) {
-                val ended = current.copy(running = false, complete = true, material = -1)
-                _state.update { it.copy(falling = ended, notice = "El tablero se ha llenado. Las piezas sin transformar se han perdido.") }
+            val eligible = eligibleProcessingMaterials(Material.entries.take(5).associateWith(player::amount))
+            if (eligible.isEmpty()) {
+                val ended = current.copy(
+                    cells = List(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 },
+                    material = -1,
+                    running = false,
+                    complete = true,
+                    started = true,
+                )
+                _state.update { it.copy(falling = ended, notice = "No tienes 4 unidades de ningún material. El tablero se ha perdido.") }
                 repository.saveSession("processing", gson.toJson(ended))
                 return@withLock
             }
-            val total = raw.sumOf { it.second }
-            var pick = Random.nextInt(total)
-            val material = raw.first { (_, quantity) -> (pick < quantity).also { pick -= quantity } }.first
-            val next = current.copy(material = material.ordinal, row = 0, column = 2, running = true, started = true)
-            val consumed = repository.commitProcessing(emptyMap(), material, gson.toJson(next)) ?: return@withLock
+            val material = chooseProcessingMaterial(eligible)
+            val shapeVariant = Random.nextInt(FallingEngine.SHAPE_COUNT)
+            val next = current.copy(
+                material = material.ordinal,
+                shapeVariant = shapeVariant,
+                row = 0,
+                column = FallingEngine.spawnColumn(shapeVariant),
+                rotation = 0,
+                running = true,
+                started = true,
+            )
+            if (!FallingEngine.canPlace(next.cells, next.shapeVariant, next.row, next.column, next.rotation)) {
+                val ended = next.copy(cells = List(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 }, material = -1, running = false, complete = true)
+                _state.update { it.copy(falling = ended, notice = "El tablero llegó arriba. Las piezas que quedaban se han perdido.") }
+                repository.saveSession("processing", gson.toJson(ended))
+                return@withLock
+            }
+            val consumed = repository.commitProcessing(emptyMap(), material, gson.toJson(next), consumeCount = 4) ?: return@withLock
             _state.update { it.copy(falling = next, player = consumed, notice = null) }
         }
     }
@@ -168,8 +273,20 @@ class GameViewModel internal constructor(
     }
 
     fun moveFalling(delta: Int) = updateFalling { FallingEngine.move(it, delta) }
+    fun rotateFalling() = updateFalling(FallingEngine::rotate)
     fun dropFalling() = resolveFalling { FallingEngine.drop(it) }
     fun tickFalling() = resolveFalling { FallingEngine.tick(it) }
+
+    fun completeProcessingClear(animationId: Long) = viewModelScope.launch {
+        processingMutex.withLock {
+            val current = _state.value.falling ?: return@withLock
+            val animation = current.pendingClear?.takeIf { it.id == animationId } ?: return@withLock
+            val processedRewards = animation.cells.mapNotNull { cell ->
+                Material.entries.getOrNull(cell.material)?.refined
+            }.groupingBy { it }.eachCount()
+            finishProcessingTurn(current.copy(pendingClear = null), processedRewards)
+        }
+    }
 
     private fun updateFalling(transform: (FallingState) -> FallingState) = viewModelScope.launch {
         processingMutex.withLock {
@@ -183,30 +300,71 @@ class GameViewModel internal constructor(
     private fun resolveFalling(transform: (FallingState) -> LockResult) = viewModelScope.launch {
         processingMutex.withLock {
             val current = _state.value.falling ?: return@withLock
+            if (current.pendingClear != null) return@withLock
             val result = transform(current)
-            var next = result.state
-            var consume: Material? = null
-            var message: String? = result.refined.entries.takeIf { it.isNotEmpty() }
-                ?.joinToString(" · ") { "${it.value} ${it.key.label}" }
-            if (next.material < 0 && !next.complete) {
-                val player = repository.playerOnce()
-                if (Material.entries.take(5).none { player.amount(it) > 0 }) {
-                    next = next.copy(running = false, complete = true)
-                } else if (next.cells[2] >= 0) {
-                    next = next.copy(running = false, complete = true)
-                    message = "El tablero se ha llenado. Las piezas sin transformar se han perdido."
+            val next = result.state
+            if (next.material >= 0 || next.pendingClear != null) {
+                _state.update { it.copy(falling = next) }
+                repository.saveSession("processing", gson.toJson(next))
+                return@withLock
+            }
+            finishProcessingTurn(next, emptyMap())
+        }
+    }
+
+    private suspend fun finishProcessingTurn(state: FallingState, processedRewards: Map<Material, Int>) {
+        var next = state
+        var consume: Material? = null
+        var message = processedRewards.entries.takeIf { it.isNotEmpty() }
+            ?.joinToString(" · ") { "+${it.value} ${it.key.label}" }
+
+        if (next.complete) {
+            next = next.copy(cells = List(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 }, material = -1, running = false)
+            message = listOfNotNull(message, "El tablero llegó arriba; las piezas restantes se han perdido.").joinToString(" ")
+        } else if (next.material < 0) {
+            val player = repository.playerOnce()
+            val updatedInventory = processedRewards.entries.fold(player) { currentPlayer, (material, quantity) ->
+                currentPlayer.withAmount(material, currentPlayer.amount(material) + quantity)
+            }
+            val eligible = eligibleProcessingMaterials(Material.entries.take(5).associateWith(updatedInventory::amount))
+            if (eligible.isEmpty()) {
+                next = next.copy(
+                    cells = List(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 },
+                    running = false,
+                    complete = true,
+                    material = -1,
+                )
+                message = listOfNotNull(message, "No quedan 4 unidades de ningún material; el tablero se ha perdido.").joinToString(" ")
+            } else {
+                val chosen = chooseProcessingMaterial(eligible)
+                val spawned = next.copy(
+                    material = chosen.ordinal,
+                    row = 0,
+                    shapeVariant = Random.nextInt(FallingEngine.SHAPE_COUNT),
+                    column = 0,
+                    rotation = 0,
+                    running = true,
+                    complete = false,
+                    started = true,
+                )
+                val centeredSpawn = spawned.copy(column = FallingEngine.spawnColumn(spawned.shapeVariant))
+                if (!FallingEngine.canPlace(centeredSpawn.cells, centeredSpawn.shapeVariant, centeredSpawn.row, centeredSpawn.column, centeredSpawn.rotation)) {
+                    next = centeredSpawn.copy(cells = List(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 }, material = -1, running = false, complete = true)
+                    message = listOfNotNull(message, "El tablero llegó arriba; las piezas restantes se han perdido.").joinToString(" ")
                 } else {
-                    val raw = Material.entries.take(5).map { it to player.amount(it) }.filter { it.second > 0 }
-                    val total = raw.sumOf { it.second }
-                    var pick = Random.nextInt(total)
-                    val chosen = raw.first { (_, quantity) -> (pick < quantity).also { pick -= quantity } }.first
                     consume = chosen
-                    next = next.copy(material = chosen.ordinal, row = 0, column = 2, running = true, started = true)
+                    next = centeredSpawn
                 }
             }
-            val committedPlayer = repository.commitProcessing(result.refined, consume, gson.toJson(next)) ?: return@withLock
-            _state.update { it.copy(falling = next, player = committedPlayer, notice = message) }
         }
+
+        val committedPlayer = repository.commitProcessing(
+            processedRewards,
+            consume,
+            gson.toJson(next),
+            consumeCount = if (consume == null) 0 else 4,
+        ) ?: return
+        _state.update { it.copy(falling = next, player = committedPlayer, notice = message) }
     }
 
     fun pauseProcessing() = viewModelScope.launch {
@@ -223,25 +381,58 @@ class GameViewModel internal constructor(
     fun abandonProcessing() = viewModelScope.launch {
         processingMutex.withLock {
             val current = _state.value.falling ?: return@withLock
-            val end = current.copy(running = false, complete = true, material = -1)
+            val end = current.copy(
+                cells = List(FallingEngine.COLUMNS * FallingEngine.ROWS) { -1 },
+                running = false,
+                complete = true,
+                material = -1,
+            )
             _state.update { it.copy(falling = end, notice = "Procesamiento terminado. Las piezas del tablero se han perdido.") }
             repository.saveSession("processing", gson.toJson(end))
         }
     }
 
-    fun showUpgrade(equipment: Equipment) { _state.update { it.copy(equipmentDialog = equipment) } }
-    fun dismissUpgrade() { _state.update { it.copy(equipmentDialog = null) } }
+    fun showUpgrade(equipment: Equipment) {
+        _state.update { it.copy(equipmentDialog = equipment, upgradeFeedback = null, notice = null) }
+    }
+    fun dismissUpgrade() { _state.update { it.copy(equipmentDialog = null, upgradeFeedback = null) } }
     fun clearNotice() { _state.update { it.copy(notice = null) } }
     fun upgrade(equipment: Equipment) = viewModelScope.launch {
-        val success = repository.upgrade(equipment)
-        _state.update { it.copy(equipmentDialog = null, notice = if (success) "${equipment.label} mejorado" else "No tienes materiales suficientes") }
+        upgradeMutex.withLock {
+            val fails = random.nextFloat() < GameBalance.BLACKSMITH_FAILURE_PROBABILITY
+            val attempt = repository.upgrade(equipment, fails)
+            upgradeFeedbackSequence += 1
+            _state.update {
+                it.copy(
+                    player = attempt.player,
+                    equipmentDialog = equipment,
+                    upgradeFeedback = UpgradeFeedbackEvent(upgradeFeedbackSequence, attempt.outcome),
+                    notice = null,
+                )
+            }
+        }
+    }
+
+    private fun eligibleProcessingMaterials(amounts: Map<Material, Int>): List<Pair<Material, Int>> =
+        amounts.mapNotNull { (material, amount) ->
+            val completePieces = amount.coerceAtLeast(0) / 4
+            if (completePieces > 0) material to completePieces else null
+        }
+
+    private fun chooseProcessingMaterial(eligible: List<Pair<Material, Int>>): Material {
+        var pick = Random.nextInt(eligible.sumOf { it.second })
+        return eligible.first { (_, weight) -> (pick < weight).also { pick -= weight } }.first
     }
 
     fun openBattle() = viewModelScope.launch {
         val saved = repository.session("combat")
-        val existing = saved?.let { runCatching { gson.fromJson<BattleState>(it, battleType) }.getOrNull() }
+        val existing = saved?.let { serialized ->
+            runCatching { gson.fromJson<BattleState>(serialized, battleType) }.getOrNull()
+                ?.let { it.copy(encounterNumber = it.encounterNumber.coerceAtLeast(1)) }
+        }
         if (existing != null) {
-            _state.update { it.copy(battle = existing.copy(paused = true), notice = null) }
+            _state.update { it.copy(battle = existing, notice = null) }
+            if (existing.running && !existing.complete && !existing.paused) launchBattleClock()
         } else {
             _state.update { it.copy(battle = null, notice = null) }
         }
@@ -249,20 +440,86 @@ class GameViewModel internal constructor(
 
     fun startBattle() = viewModelScope.launch {
         battleMutex.withLock {
+            battleJob?.cancel()
+            battleJob = null
             val player = repository.playerOnce()
-            val enemyLevel = player.level
-            val enemies = List(3) {
-                val hp = 25 * enemyLevel
-                EnemyState(enemyLevel, hp, hp, 4 * enemyLevel, enemyLevel, 2 * enemyLevel)
+            val previous = _state.value.battle
+            if (previous?.complete == true && !previous.won && player.currentHealth <= 0) {
+                _state.update { it.copy(notice = "Necesitas curarte en la hoguera antes de reintentar.") }
+                return@withLock
             }
-            val playerInterval = attackInterval(player.speed)
-            val enemyInterval = attackInterval(enemies.first().speed)
-            val battle = BattleState(enemies, playerHealth = player.maxHealth, playerRemainingMs = playerInterval, enemyRemainingMs = enemyInterval)
-            _state.update { it.copy(player = player, battle = battle, notice = null) }
+            val nextSequence = (previous?.entrySequence ?: 0L) + 1L
+            val battle = if (previous?.complete == true && !previous.won) {
+                val failedIndex = previous.enemyIndex.coerceIn(previous.enemies.indices)
+                val restoredEnemies = previous.enemies.mapIndexed { index, enemy ->
+                    when {
+                        index < failedIndex -> enemy.copy(health = 0)
+                        index == failedIndex -> enemy.copy(health = enemy.maxHealth)
+                        else -> enemy
+                    }
+                }
+                val failedEnemy = restoredEnemies[failedIndex]
+                previous.copy(
+                    enemies = restoredEnemies,
+                    enemyIndex = failedIndex,
+                    playerHealth = player.currentHealth,
+                    specialCharge = 0,
+                    selectedEnemy = failedIndex,
+                    playerRemainingMs = attackInterval(player.speed),
+                    enemyRemainingMs = attackInterval(failedEnemy.speed),
+                    running = true,
+                    paused = false,
+                    complete = false,
+                    won = false,
+                    experienceEarned = 0,
+                    playerAnimation = null,
+                    enemyAnimation = null,
+                    playerDamage = null,
+                    enemyDamage = null,
+                    entrySequence = nextSequence,
+                    entering = true,
+                    entryRemainingMs = 1_250L,
+                    treatmentUsed = false,
+                )
+            } else {
+                createBattle(
+                    player = player,
+                    encounterNumber = (previous?.encounterNumber ?: 0).coerceAtLeast(0) + 1,
+                    entrySequence = nextSequence,
+                )
+            }
+            _state.update { it.copy(player = player.copy(currentHealth = battle.playerHealth), battle = battle, notice = null) }
             repository.commitBattle(gson.toJson(battle), battle.playerHealth)
-            _state.update { it.copy(player = player.copy(currentHealth = player.maxHealth)) }
         }
         launchBattleClock()
+    }
+
+    private fun createBattle(player: PlayerEntity, encounterNumber: Int, entrySequence: Long): BattleState {
+        val level = player.level
+        val enemies = List(3) {
+            val hp = 25 * level
+            EnemyState(level, hp, hp, 4 * level, level, 2 * level)
+        }
+        return BattleState(
+            enemies = enemies,
+            playerHealth = player.currentHealth,
+            playerRemainingMs = attackInterval(player.speed),
+            enemyRemainingMs = attackInterval(enemies.first().speed),
+            encounterNumber = encounterNumber,
+            entrySequence = entrySequence,
+            entering = true,
+            entryRemainingMs = 1_250L,
+        )
+    }
+
+    fun completeBattleEntry(sequence: Long) = viewModelScope.launch {
+        battleMutex.withLock {
+            val current = _state.value.battle ?: return@withLock
+            if (!current.entering || current.entrySequence != sequence) return@withLock
+            val ready = current.copy(entering = false, entryRemainingMs = 0L)
+            _state.update { it.copy(battle = ready) }
+            repository.commitBattle(gson.toJson(ready), ready.playerHealth)
+        }
     }
 
     fun selectEnemy(index: Int) {
@@ -273,11 +530,52 @@ class GameViewModel internal constructor(
     fun useSpecial() = viewModelScope.launch {
         battleMutex.withLock {
             val battle = _state.value.battle ?: return@withLock
-            if (!battle.running || battle.paused || battle.specialCharge < 3 || battle.complete) return@withLock
+            if (!battle.running || battle.paused || battle.entering || battle.specialCharge < 3 || battle.complete) return@withLock
             val enemy = battle.enemies[battle.enemyIndex]
             val damage = CombatEngine.specialAttack(_state.value.player.magic, enemy.defense)
-            val next = damageEnemy(battle.copy(specialCharge = 0), damage)
-            commitBattle(next, next.experienceEarned - battle.experienceEarned)
+            val next = damageEnemy(
+                battle.copy(
+                    specialCharge = 0,
+                    playerAnimation = BattleAnimationEvent(
+                        (battle.playerAnimation?.id ?: 0L) + 1L,
+                        special = true,
+                        targetIndex = battle.enemyIndex,
+                    ),
+                    enemyDamage = BattleDamageEvent(
+                        (battle.enemyDamage?.id ?: 0L) + 1L,
+                        damage,
+                        targetIndex = battle.enemyIndex,
+                        defeated = damage >= enemy.health,
+                    ),
+                ),
+                damage,
+            )
+            val earned = next.experienceEarned - battle.experienceEarned
+            commitBattle(next, earned)
+        }
+    }
+
+    fun applySuture(successfulWounds: Int) = viewModelScope.launch {
+        battleMutex.withLock {
+            val battle = _state.value.battle ?: return@withLock
+            if (!battle.complete || battle.treatmentUsed) return@withLock
+            val player = repository.playerOnce()
+            val healingPerWound = ((player.maxHealth + 9) / 10).coerceAtLeast(1)
+            val health = (battle.playerHealth + healingPerWound * successfulWounds.coerceIn(0, 3))
+                .coerceAtMost(player.maxHealth)
+            val treatedBattle = battle.copy(playerHealth = health, treatmentUsed = true)
+            val updatedPlayer = repository.commitSuture(gson.toJson(treatedBattle), health)
+            if (updatedPlayer != null) {
+                _state.update {
+                    it.copy(
+                        player = updatedPlayer,
+                        battle = treatedBattle,
+                        notice = "Sutura terminada: ${health - battle.playerHealth} PV recuperados.",
+                    )
+                }
+            } else {
+                _state.update { it.copy(notice = "Esta etapa ya recibió una cura.") }
+            }
         }
     }
 
@@ -348,6 +646,15 @@ class GameViewModel internal constructor(
     private suspend fun advanceBattle(delta: Long, now: Long): Boolean = battleMutex.withLock {
         var battle = _state.value.battle ?: return@withLock true
         if (!foreground || battle.complete || battle.paused || !battle.running) return@withLock true
+        if (battle.entering) {
+            val remaining = (battle.entryRemainingMs - delta).coerceAtLeast(0L)
+            val updated = battle.copy(entering = remaining > 0L, entryRemainingMs = remaining)
+            _state.update { it.copy(battle = updated) }
+            if (remaining == 0L || now % 1000L < 100L) {
+                repository.commitBattle(gson.toJson(updated), updated.playerHealth)
+            }
+            return@withLock false
+        }
         val previousExperience = battle.experienceEarned
         battle = battle.copy(
             playerRemainingMs = CombatEngine.remainingAfter(battle.playerRemainingMs, delta),
@@ -362,6 +669,17 @@ class GameViewModel internal constructor(
                 battle.copy(
                     playerRemainingMs = attackInterval(player.speed),
                     specialCharge = (battle.specialCharge + 1).coerceAtMost(3),
+                    playerAnimation = BattleAnimationEvent(
+                        (battle.playerAnimation?.id ?: 0L) + 1L,
+                        targetIndex = battle.enemyIndex,
+                    ),
+                    enemyDamage = BattleDamageEvent(
+                        (battle.enemyDamage?.id ?: 0L) + 1L,
+                        attack.damage,
+                        attack.critical,
+                        battle.enemyIndex,
+                        defeated = attack.damage >= enemy.health,
+                    ),
                 ),
                 attack.damage,
             )
@@ -371,14 +689,27 @@ class GameViewModel internal constructor(
             val enemy = battle.enemies[battle.enemyIndex]
             val damage = CombatEngine.normalAttack(enemy.attack, _state.value.player.defense, 0).damage
             val hp = (battle.playerHealth - damage).coerceAtLeast(0)
-            battle = battle.copy(playerHealth = hp, enemyRemainingMs = attackInterval(enemy.speed))
+            battle = battle.copy(
+                playerHealth = hp,
+                enemyRemainingMs = attackInterval(enemy.speed),
+                enemyAnimation = BattleAnimationEvent(
+                    (battle.enemyAnimation?.id ?: 0L) + 1L,
+                    targetIndex = battle.enemyIndex,
+                ),
+                playerDamage = BattleDamageEvent((battle.playerDamage?.id ?: 0L) + 1L, damage),
+            )
             if (hp == 0) battle = battle.copy(running = false, complete = true, won = false)
             changed = true
         }
         _state.update { it.copy(battle = battle) }
-        if (changed) commitBattle(battle, battle.experienceEarned - previousExperience)
-        else if (now % 1000L < 100L) commitBattle(battle)
-        battle.complete
+        if (changed) {
+            val earned = battle.experienceEarned - previousExperience
+            commitBattle(battle, earned)
+            battle.complete
+        } else {
+            if (now % 1000L < 100L) commitBattle(battle)
+            battle.complete
+        }
     }
 
     private fun damageEnemy(battle: BattleState, damage: Int): BattleState {
